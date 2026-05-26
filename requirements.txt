@@ -1,0 +1,5 @@
+streamlit
+streamlit-folium
+folium
+openai==0.28
+pandas
