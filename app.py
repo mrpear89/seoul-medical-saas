@@ -134,17 +134,3 @@ with col2:
             st.success("🎉 하이퍼 로컬 리포트 컴파일 성공!")
             st.markdown(response['choices'][0]['message']['content'])
 ''')
-
-print("✅ [기능 확장 대성공] 구당 5개 상권 + 개폐업 트렌드 보드 탑재 app.py 빌드 완료!")
-
-# 3. 우회 주소 터널 생성 및 구동
-import urllib
-print("🔗 접속 IP 주소:", urllib.request.urlopen('https://ident.me').read().decode('utf8'))
-print("-" * 60)
-
-os.system("streamlit run app.py --server.port 8501 &")
-import time
-time.sleep(3)
-
-print("🚀 한 차원 진화한 서울 전역 초정밀 대시보드 앱 링크를 클릭하세요:")
-!npx localtunnel --port 8501
