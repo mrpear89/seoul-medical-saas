@@ -10,7 +10,7 @@ from streamlit_folium import st_folium
 # 1. 원장님의 OpenAI API 키를 여기에 정확하게 입력하세요!
 # =========================================================================
 openai_client = OpenAI(
-    api_key="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"
+    api_key="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"
 )
 
 st.set_page_config(layout="wide", page_title="서울 전역 하이퍼 로컬 메디컬 상권분석 SaaS")
