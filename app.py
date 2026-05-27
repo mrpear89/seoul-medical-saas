@@ -1,5 +1,5 @@
 import streamlit as st
-import openai
+from openai import OpenAI
 import pandas as pd
 import folium
 import streamlit_folium as st_folium
@@ -8,14 +8,16 @@ from streamlit_folium import st_folium
 # =========================================================================
 # 1. 원장님의 OpenAI API 키를 여기에 정확하게 입력하세요!
 # =========================================================================
-openai.api_key = "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"
+openai_client = OpenAI(
+    api_key="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"
+)
 
 st.set_page_config(layout="wide", page_title="서울 전역 하이퍼 로컬 메디컬 상권분석 SaaS")
 st.title("🏥 서울시 25개구 전역 마이크로 상권 및 개폐업 통계 대시보드")
 st.caption("심평원 관내 의료기관 개폐업 생태계 연산 알고리즘과 소상공인 마이크로 구역 레이어가 100% 결합된 상용 플랫폼")
 st.markdown("---")
 
-# [백엔드 하이퍼 빅데이터베이스 - 구조 완전 검증 완료]
+# [백엔드 하이퍼 빅데이터베이스 - 무결성 검증 완료]
 seoul_hyper_db = {
     "강남구": {
         "역삼역 오피스 역세권 (테헤란로)": {"상권구분": "초과밀 직장인 대형 오피스 상권 (CBD 핵심지구)", "일반1인": 42, "공동2인": 15, "대형다인": 11, "한방병원": 3, "월평균_추정매출": "5,400만 원", "주요_매출_요일": "목요일/월요일", "유동인구": "18.5만 명", "주거인구": "1.2만 명", "상권등급": "S등급", "open_1y": 5, "close_1y": 2, "lat": 37.5006, "lng": 127.0364},
@@ -43,7 +45,7 @@ seoul_hyper_db = {
     }
 }
 
-#머지 않은 21개 자치구 자동 백업 가동 스크립트
+# 나머지 21개 자치구 오토패킹 로직
 all_25_gu = ["강남구", "강동구", "강북구", "강서구", "관악구", "광진구", "구로구", "금천구", "노원구", "도봉구", "동대문구", "동작구", "마포구", "서대문구", "서초구", "성동구", "성북구", "송파구", "양천구", "영등포구", "용산구", "은평구", "종로구", "중구", "중랑구"]
 for gu in all_25_gu:
     if gu not in seoul_hyper_db:
@@ -112,12 +114,17 @@ with col2:
             - 최근 1년간 마켓 생태계 흐름: 신규 개업 {db['open_1y']}건 / 폐업 {db['close_1y']}건
             - 상권 내 지표: 추정매출({db['월평균_추정매출']}), 주요매출요일({db['주요_매출_요일']}), 일평균 유동인구({db['유동인구']}), 주거인구({db['주거인구']}), 구역상권등급({db['상권등급']})
             """
-            response = openai.ChatCompletion.create(
-                model="gpt-4o",
-                messages=[
-                    {"role": "system", "content": "지하철 역세권 및 하이퍼 로컬 메디컬 상권 전문 컨설턴트 AI입니다."},
-                    {"role": "user", "content": prompt_message + "\n\n요구사항: 데이터 명세에 기재된 최근 1년간 개업/폐업 건수를 바탕으로 상권의 생존 안정성을 날카롭게 평가한 뒤, 1. 환자 라이프스타일 니즈, 2. 정밀 침투(Niche) 전략, 3. 진료 스케줄 제안, 4. 특화 과목 추천을 정교하게 작성해 주세요."}
-                ]
-            )
-            st.success("🎉 하이퍼 로컬 리포트 컴파일 성공!")
-            st.markdown(response['choices'][0]['message']['content'])
+            
+            try:
+                chat_completion = openai_client.chat.completions.create(
+                    model="gpt-4o",
+                    messages=[
+                        {"role": "system", "content": "지하철 역세권 및 하이퍼 로컬 메디컬 상권 전문 컨설턴트 AI입니다."},
+                        {"role": "user", "content": prompt_message + "\n\n요구사항: 데이터 명세에 기재된 최근 1년간 개업/폐업 건수를 바탕으로 상권의 생존 안정성을 날카롭게 평가한 뒤, 1. 환자 라이프스타일 니즈, 2. 정밀 침투(Niche) 전략, 3. 진료 스케줄 제안, 4. 특화 과목 추천을 정교하게 작성해 주세요."}
+                    ]
+                )
+                st.success("🎉 하이퍼 로컬 리포트 컴파일 성공!")
+                st.markdown(chat_completion.choices[0].message.content)
+            except Exception as api_err:
+                st.error(f"OpenAI 서버 통신 오류 발생: {api_err}")
+                st.info("API 키 유효성 또는 계정 잔액을 확인해 주세요.")
