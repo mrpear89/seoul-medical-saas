@@ -1,4 +1,3 @@
-
 import streamlit as st
 from openai import OpenAI
 import pandas as pd
@@ -7,11 +6,13 @@ import streamlit_folium as st_folium
 from streamlit_folium import st_folium
 
 # =========================================================================
-# 1. 원장님의 OpenAI API 키를 여기에 정확하게 입력하세요!
+# [상용 표준 보안 세팅] 스트림릿 가상 금고(Secrets)에서 안전하게 키를 가져옵니다.
 # =========================================================================
 openai_client = OpenAI(
-    api_key="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"
+    api_key=st.secrets["OPENAI_API_KEY"]
 )
+
+# (이하 아래 데이터베이스 및 레이아웃 코드는 그대로 둡니다.)
 
 st.set_page_config(layout="wide", page_title="서울 전역 하이퍼 로컬 메디컬 상권분석 SaaS")
 st.title("🏥 서울시 25개구 전역 마이크로 상권 및 개폐업 통계 대시보드")
