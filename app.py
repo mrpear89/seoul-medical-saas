@@ -12,17 +12,8 @@ openai_client = OpenAI(
     api_key=st.secrets["OPENAI_API_KEY"]
 )
 
-# [UI/UX 테마 설정] 프리미엄 메디컬 SaaS 프로페셔널 톤앤매너
+# [UI/UX 테마 설정] 프리미엄 메디컬 SaaS 프로페셔널 레이아웃
 st.set_page_config(layout="wide", page_title="서울 전역 하이퍼 로컬 메디컬 상권분석 SaaS")
-
-# 커스텀 CSS 주입 (오류가 나지 않는 최신 스트림릿 표준 규격 문법으로 수정 완료)
-st.markdown("""
-    <style>
-    .stMetric { border: 1px solid #E0E0E0; padding: 15px; border-radius: 4px; background-color: #FAFAFA; box-shadow: 0px 1px 2px rgba(0,0,0,0.05); }
-    div[data-testid="stExpander"] { border: 1px solid #E0E0E0; border-radius: 4px; }
-    h1, h2, h3 { font-family: 'Helvetica Neue', 'Segoe UI', Helvetica, Arial, sans-serif; color: #1E1E1E; }
-    </style>
-    """, unsafe_allowed_html=True)
 
 st.title("🏥 서울시 25개구 전역 마이크로 상권 및 개폐업 통계 대시보드")
 st.caption("건강보험심사평가원 의료기관 데이터 밸런싱 및 소상공인 마이크로 구역 레이어가 결합된 상용 프로 등급 플랫폼")
@@ -56,7 +47,7 @@ seoul_hyper_db = {
     }
 }
 
-# 25개 자치구 자동 정렬 패킹 연산부
+# 25개 자치구 오토 마이크로 패킹 시스템
 all_25_gu = ["강남구", "강동구", "강북구", "강서구", "관악구", "광진구", "구로구", "금천구", "노원구", "도봉구", "동대문구", "동작구", "마포구", "서대문구", "서초구", "성동구", "성북구", "송파구", "양천구", "영등포구", "용산구", "은평구", "종로구", "중구", "중랑구"]
 for gu in all_25_gu:
     if gu not in seoul_hyper_db:
@@ -85,24 +76,24 @@ st.markdown(f"### 📍 현재 선택 구역: **서울특별시 {selected_gu} {se
 m_col1, m_col2, m_col3, m_col4 = st.columns(4)
 
 with m_col1:
-    st.metric(label="🎯 상권 마이크로 속성 분류", value=db["상권구분"][:20] + "...")
+    st.metric(label="🎯 상권 마이크로 속성 분류", value=db["상권구분"])
 with m_col2:
     st.metric(label="💰 구역 추정 월평균 매출", value=db["월평균_추정매출"])
 with m_col3:
     st.metric(label="📊 구역 종합 상권 등급", value=db["상권등급"])
 with m_col4:
     survival_rate = round((db['open_1y'] / (db['close_1y'] if db['close_1y'] > 0 else 1)) * 100, 1)
-    st.metric(label="🔥 상권 경쟁 생존 인덱스", value=f"{survival_rate}%", delta=f"개업{db['open_1y']} / 폐업{db['close_1y']}")
+    st.metric(label="🔥 상권 경쟁 생존 인덱스", value=f"{survival_rate}%", delta=f"개업 {db['open_1y']} / 폐업 {db['close_1y']}")
 
 st.markdown("---")
 
 # -------------------------------------------------------------------------
-# 메인 하이퍼 로컬 레이아웃
+# 메인 하이퍼 로컬 레이아웃 (좌: 지도 및 통계 / 우: AI 프리미엄 개원 분석)
 # -------------------------------------------------------------------------
 col_left, col_right = st.columns([1, 1.1])
 
 with col_left:
-    st.subheader("🏢 관내 의료기관 실시간 분포 인덱스")
+    st.subheader("🏢 관내 의료기관 분포 현황")
     
     k3, k4, k5, k6 = st.columns(4)
     k3.metric(label="일반 1인", value=f"{db['일반1인']}개 소")
