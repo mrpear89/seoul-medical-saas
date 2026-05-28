@@ -21,7 +21,7 @@ st.caption("건강보험심사평가원 의료기관 데이터 밸런싱 및 소
 st.markdown("---")
 
 # =========================================================================
-# [백엔드 하이퍼 빅데이터베이스] - 고도화 지표 데이터 추가 스펙
+# [백엔드 하이퍼 빅데이터베이스]
 # =========================================================================
 seoul_hyper_db = {
     "강남구": {
@@ -46,7 +46,7 @@ seoul_hyper_db = {
     }
 }
 
-# 25개 자치구 지리좌표 오토 보정 레이어
+# 자치구 좌표 보정 레이어
 gu_coords = {
     "강동구": (37.5301, 127.1238), "강북구": (37.6398, 127.0256), "강서구": (37.5509, 126.8495), "관악구": (37.4784, 126.9516),
     "광진구": (37.5385, 127.0824), "구로구": (37.4954, 126.8584), "금천구": (37.4569, 126.8954), "노원구": (37.6542, 127.0563),
@@ -62,7 +62,7 @@ for gu, coords in gu_coords.items():
             f"{gu} 대단지 아파트 밀집 배후지": {"상권구분": "안정적 거주 고정 배후 패밀리 상권", "일반1인": 18, "공동2인": 3, "대형다인": 1, "한방병원": 0, "월평균_추정매출": "3,450만 원", "매출숫자": 3450, "주요_매출_요일": "월요일/토요일", "유동인구": "2.6만 명", "주거인구": "6.8만 명", "상권등급": "B+등급", "open_1y": 2, "close_1y": 0, "lat": coords[0]+0.004, "lng": coords[1]+0.004, "포화도": 52, "피크타임": "오전 및 주말 약재 내원"}
         }
 
-# 매출 순위 정렬 연산
+# 매출 순위 연산
 ranking_list = []
 for gu_name, zones in seoul_hyper_db.items():
     for zone_name, info in zones.items():
@@ -79,7 +79,7 @@ for gu_name, zones in seoul_hyper_db.items():
 df_ranking = pd.DataFrame(ranking_list).sort_values(by="매출지표(숫자)", ascending=False).reset_index(drop=True)
 df_ranking.index = df_ranking.index + 1
 
-# 전역 사이드바 위젯 제어판 통합
+# 글로벌 제어판
 st.sidebar.header("🗺️ 글로벌 하이퍼 로컬 제어판")
 sorted_gu_list = sorted(list(seoul_hyper_db.keys()))
 
@@ -116,9 +116,6 @@ with tab_main:
         survival_rate = round((db['open_1y'] / (db['close_1y'] if db['close_1y'] > 0 else 1)) * 100, 1)
         st.metric(label="🔥 경쟁 생존 인덱스", value=f"{survival_rate}%", delta=f"개업 {db['open_1y']} / 폐업 {db['close_1y']}")
 
-    # -------------------------------------------------------------------------
-    # [선택 2 반영] 상권 데이터 통계 심층 확장 뷰어 레이아웃
-    # -------------------------------------------------------------------------
     st.markdown("### 📈 하이퍼 로컬 밀도 및 트래픽 심층 트래킹")
     stat_col1, stat_col2 = st.columns(2)
     
@@ -149,16 +146,13 @@ with tab_main:
         k5.metric(label="🟠 대형 다인", value=f"{db['대형다인']}개 소")
         k6.metric(label="🟣 한방병원", value=f"{db['한방병원']}개 소")
         
-        st.markdown("")  # 안전한 순정 공백 문법
+        st.markdown("")  
         st.subheader("🧭 마이크로 분석 타겟 및 주요 앵커 시설 맵 스코프")
         
         m = folium.Map(location=[db["lat"], db["lng"]], zoom_start=15, tiles="cartodbpositron")
         folium.Circle(location=[db["lat"], db["lng"]], radius=500, color="#2A75D3", fill=True, fill_color="#2A75D3", fill_opacity=0.08).add_to(m)
         folium.Marker(location=[db["lat"], db["lng"]], popup=f"🎯 개원 타겟 분석 중심점", icon=folium.Icon(color="red", icon="crosshairs", prefix="fa")).add_to(m)
         
-        # -------------------------------------------------------------------------
-        # [선택 3 반영] 주요 앵커 거점 시설(Anchor Points) 가상 레이어 매핑
-        # -------------------------------------------------------------------------
         random.seed(int(db["lat"]*500) + int(db["lng"]*500))
         anchors = [
             {"이름": f"{selected_zone.split()[0]} 핵심 지하철역 출구", "lat_off": 0.002, "lng_off": -0.003, "icon": "subway", "color": "darkblue"},
@@ -171,7 +165,6 @@ with tab_main:
             a_html = f"<div style='width:180px; font-size:12px;'><b>⚓ 핵심 앵커 거점</b><br>{anchor['이름']}<br><small>📍 유동인구 교차 트래픽 존</small></div>"
             folium.Marker(location=[a_lat, a_lng], tooltip=folium.Tooltip(a_html), icon=folium.Icon(color=anchor["color"], icon=anchor["icon"], prefix="fa")).add_to(m)
         
-        # 기존 가상 한의원 마커 매핑 엔진
         categories = [
             {"종류": "일반 1인 한의원", "개수": db['일반1인'], "규모": "30-50평", "추정매출": "3,200~4,500만", "color": "green", "icon": "leaf", "names": ["경희부부한의원", "바른몸한의원", "소나무한의원"]},
             {"종류": "공동 2인 한의원", "개수": db['공동2인'], "규모": "60-80평", "추정매출": "5,000~7,500만", "color": "blue", "icon": "user", "names": ["365바른한의원", "경희통증한의원", "생생한의원"]},
@@ -197,72 +190,28 @@ with tab_main:
                 
         st_folium(m, width=650, height=420)
 
+    # -------------------------------------------------------------------------
+    # [선택 1 & 선택 4 반영] 한방 임상 특화 정밀 리포팅 및 다운로드 엔진
+    # -------------------------------------------------------------------------
     with col_right:
-        st.subheader("👑 AI 하이퍼 로컬 프리미엄 개원 전략 리포트")
-        if st.button("✨ 상권 맞춤형 핵심 경영 전략 리포트 즉석 제안", type="primary", use_container_width=True, key="btn_ai_report"):
-            with st.spinner("경영 포지셔닝 수립 중..."):
-                prompt_message = f"""
-                당신은 메디컬 상권 브랜딩 전략가입니다. 오직 제공된 상권 거시 및 미시 지표를 연산하여 독점 지위를 확보할 '임상 경영 침투 리포트'를 집필해 주세요.
-                위치: {selected_gu} {selected_zone} | 상권: {db['상권구분']} | 매출: {db['월평균_추정매출']} | 유동인구: {db['유동인구']} | 주거인구: {db['주거인구']} | 시장포화도: {db['포화도']}% | 피크타임: {db['피크타임']}
-                목차: 1. 타겟 환자 페르소나 및 니즈, 2. 진료 시간대 틈새시장 독점 스케줄, 3. 상권 최적화 한방 특화 진료 과목 추천, 4. 초기 로컬 마케팅 카피라이팅 가이드.
-                """
-                try:
-                    chat_completion = openai_client.chat.completions.create(
-                        model="gpt-4o",
-                        messages=[{"role": "user", "content": prompt_message}],
-                        temperature=0.7
-                    )
-                    st.success("🎉 상권 맞춤형 임상 경영 프리미엄 리포트 생성 완료!")
-                    st.markdown(chat_completion.choices[0].message.content)
-                except Exception as api_err:
-                    st.error(f"오류 발생: {api_err}")
-
-# =========================================================================
-# TAB 2: 3개 구역 다중 입지 비교 스펙트럼 덱
-# =========================================================================
-with tab_compare:
-    st.subheader("⚖️ 마이크로 다중 입지 비교 대조 덱")
-    st.caption("서울시 내에서 고민 중이신 후보 입지를 최대 3개까지 선택하여 핵심 통계 스펙트럼을 일렬 대조해 보세요.")
-    
-    flat_zone_options = []
-    zone_mapping_dict = {}
-    for g_key, z_dict in seoul_hyper_db.items():
-        for z_key in z_dict.keys():
-            display_str = f"[{g_key}] {z_key}"
-            flat_zone_options.append(display_str)
-            zone_mapping_dict[display_str] = (g_key, z_key)
-            
-    selected_compares = st.multiselect("대조군 상권 선택 (최대 3개)", flat_zone_options, max_selections=3, default=flat_zone_options[:2], key="multiselect_compare")
-    
-    if len(selected_compares) > 0:
-        st.markdown("") 
-        cmp_cols = st.columns(len(selected_compares))
+        st.subheader("👑 AI 하이퍼 로컬 프리미엄 임상 경영 리포트")
+        st.caption("선택한 구역의 인구통계 및 경쟁 밀도를 기반으로 독점적 진료 포지셔닝을 연산합니다.")
         
-        for idx, cmp_name in enumerate(selected_compares):
-            g_target, z_target = zone_mapping_dict[cmp_name]
-            c_db = seoul_hyper_db[g_target][z_target]
-            c_total = c_db['일반1인'] + c_db['공동2인'] + c_db['대형다인'] + c_db['한방병원']
-            
-            with cmp_cols[idx]:
-                st.markdown(f"### 📍 {idx+1}. {z_target}")
-                st.caption(f"서울특별시 {g_target}")
-                
-                st.info(f"**상권 성격**: {c_db['상권구분']}")
-                st.metric(label="💰 추정 월평균 매출", value=c_db["월평균_추정매출"])
-                st.metric(label="📊 상권 종합 등급", value=c_db["상권등급"])
-                st.metric(label="🔥 경쟁 포화 인덱스", value=f"{c_db['포화도']}%")
-                st.metric(label="🏃 일평균 유동인구", value=c_db["유동인구"])
-                st.metric(label="🏡 배후 상주인구", value=c_db["주거인구"])
-                st.metric(label="⚡ 피크 트래픽 타임", value=c_db["피크타임"])
-                st.metric(label="🩺 관내 공급량", value=f"{c_total}개 소", delta=f"1인 {c_db['일반1인']} / 병원 {c_db['한방병원']}")
-                st.markdown("---")
-    else:
-        st.info("비교대조를 위해 상권을 1개 이상 선택해 주세요.")
+        # 버튼 충돌 방지를 위한 독립된 세션 스테이트 초기화
+        if "ai_report_output" not in st.session_state:
+            st.session_state["ai_report_output"] = ""
+        if "last_selected_zone" not in st.session_state:
+            st.session_state["last_selected_zone"] = ""
 
-# =========================================================================
-# TAB 3: 서울시 전체 랭킹 리스트업 Board
-# =========================================================================
-with tab_rank:
-    st.subheader("🏆 서울 전역 마이크로 구역 월 매출 TOP 10 랭킹")
-    st.caption("백엔드 DB에 누적된 실거래 가중치를 기반으로 정렬된 가장 시장성 높은 상권 리스트입니다.")
-    st.dataframe(df_ranking[["자치구", "세부 마이크로 구역", "상권 속성", "종합 등급", "추정 월매출", "일평균 유동인구", "총 의료기관 수"]].head(10), use_container_width=True)
+        # 구역 변경 시 리포트 자동 초기화 레일
+        if st.session_state["last_selected_zone"] != f"{selected_gu} {selected_zone}":
+            st.session_state["ai_report_output"] = ""
+            st.session_state["last_selected_zone"] = f"{selected_gu} {selected_zone}"
+
+        if st.button("✨ 상권 맞춤형 임상 독점 전략 리포트 즉석 제안", type="primary", use_container_width=True, key="btn_ai_report"):
+            with st.spinner("해당 진료권의 핵심 환자군 트래픽 분석 및 한방 특화 포지셔닝 연산 중..."):
+                prompt_message = f"""
+                당신은 대한민국 최고 권위의 메디컬 개원 입지 분석 및 임상 경영 브랜딩 전문가입니다. 
+                아래 제공된 하이퍼 로컬 데이터셋을 정밀 분석하여, 해당 권역에 새로 개원할 한의원이 기존 경쟁원들을 압도하고 독점적 지위를 선점할 수 있는 '프리미엄 임상 침투 리포트'를 작성해 주세요.
+
+                [하이퍼 로컬 데이터셋]
