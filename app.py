@@ -191,22 +191,20 @@ with tab_main:
         st_folium(m, width=650, height=420)
 
     # -------------------------------------------------------------------------
-    # [선택 1 & 선택 4 반영] 한방 임상 특화 정밀 리포팅 및 다운로드 엔진
+    # [V9.1 버그 쉴드 레이어] 세션 충돌 없는 다운로드 시스템
     # -------------------------------------------------------------------------
     with col_right:
         st.subheader("👑 AI 하이퍼 로컬 프리미엄 임상 경영 리포트")
         st.caption("선택한 구역의 인구통계 및 경쟁 밀도를 기반으로 독점적 진료 포지셔닝을 연산합니다.")
         
-        # 버튼 충돌 방지를 위한 독립된 세션 스테이트 초기화
-        if "ai_report_output" not in st.session_state:
-            st.session_state["ai_report_output"] = ""
-        if "last_selected_zone" not in st.session_state:
-            st.session_state["last_selected_zone"] = ""
-
-        # 구역 변경 시 리포트 자동 초기화 레일
-        if st.session_state["last_selected_zone"] != f"{selected_gu} {selected_zone}":
-            st.session_state["ai_report_output"] = ""
-            st.session_state["last_selected_zone"] = f"{selected_gu} {selected_zone}"
+        # 안전한 세션 스테이트 초기화 레일
+        current_zone_key = f"{selected_gu} {selected_zone}"
+        
+        if "report_db" not in st.session_state:
+            st.session_state["report_db"] = {}
+            
+        if current_zone_key not in st.session_state["report_db"]:
+            st.session_state["report_db"][current_zone_key] = ""
 
         if st.button("✨ 상권 맞춤형 임상 독점 전략 리포트 즉석 제안", type="primary", use_container_width=True, key="btn_ai_report"):
             with st.spinner("해당 진료권의 핵심 환자군 트래픽 분석 및 한방 특화 포지셔닝 연산 중..."):
@@ -215,3 +213,95 @@ with tab_main:
                 아래 제공된 하이퍼 로컬 데이터셋을 정밀 분석하여, 해당 권역에 새로 개원할 한의원이 기존 경쟁원들을 압도하고 독점적 지위를 선점할 수 있는 '프리미엄 임상 침투 리포트'를 작성해 주세요.
 
                 [하이퍼 로컬 데이터셋]
+                - 위치: 서울특별시 {selected_gu} {selected_zone}
+                - 상권 속성 성격: {db['상권구분']}
+                - 구역 추정 월평균 매출: {db['월평균_추정매출']}
+                - 일평균 유동인구 / 상주인구: {db['유동인구']} / {db['주거인구']}
+                - 개원시장 경쟁 포화도 및 생존 지표: 포화도 {db['포화도']}% (개업 {db['open_1y']}개 / 폐업 {db['close_1y']}개 소)
+                - 트래픽 피크 타임: {db['피크타임']}
+
+                [리포트 작성 필수 가이드라인 - 다음 4대 챕터를 상세히 집필할 것]
+                1. 타겟 환자 페르소나 및 핵심 니즈 도출 (직장인, 노령층, 학원가 등 상권 속성에 100% 특화된 핵심 가망 환자 정의)
+                2. 진료 시간대 틈새시장 독점 스케줄 전략 (피크 타임을 고려한 야간진료, 주말진료, 예약제 순환 동선 제안)
+                3. 상권 최적화 한방 임상 특화 진료 과목 및 약침/시술 포지셔닝 (예: 근골격계 통증 약침 시술, 교통사고 추나, 만성 피로 수액형 한약, 다이어트 등 구체적 명시)
+                4. 초기 관내 환자 락인(Lock-in)을 위한 로컬 마케팅 카피라이팅 및 CRM 액션 플랜
+
+                보고서는 전문적이고 깊이 있는 톤앤매너로 작성해 주세요.
+                """
+                try:
+                    chat_completion = openai_client.chat.completions.create(
+                        model="gpt-4o",
+                        messages=[{"role": "user", "content": prompt_message}],
+                        temperature=0.7
+                    )
+                    st.session_state["report_db"][current_zone_key] = chat_completion.choices[0].message.content
+                    st.success("🎉 상권 맞춤형 임상 경영 프리미엄 리포트 생성 완료!")
+                except Exception as api_err:
+                    st.error(f"오류 발생: {api_err}")
+
+        # 리포트 출력 및 다운로드 연동 (딕셔너리 키 기반으로 에러 원천 차단)
+        saved_report = st.session_state["report_db"][current_zone_key]
+        if saved_report:
+            st.markdown("---")
+            st.markdown(saved_report)
+            st.markdown("") 
+            
+            file_title = f"서울시_{selected_gu}_{selected_zone.replace(' ', '_')}_임상경영전략_리포트.txt"
+            st.download_button(
+                label="💾 생성된 프리미엄 리포트 파일로 다운로드 (.txt)",
+                data=saved_report,
+                file_name=file_title,
+                mime="text/plain",
+                use_container_width=True,
+                key="btn_download_report_v9"
+            )
+
+# =========================================================================
+# TAB 2: 3개 구역 다중 입지 비교 스펙트럼 덱
+# =========================================================================
+with tab_compare:
+    st.subheader("⚖️ 마이크로 다중 입지 비교 대조 덱")
+    st.caption("서울시 내에서 고민 중이신 후보 입지를 최대 3개까지 선택하여 핵심 통계 스펙트럼을 일렬 대조해 보세요.")
+    
+    flat_zone_options = []
+    zone_mapping_dict = {}
+    for g_key, z_dict in seoul_hyper_db.items():
+        for z_key in z_dict.keys():
+            display_str = f"[{g_key}] {z_key}"
+            flat_zone_options.append(display_str)
+            zone_mapping_dict[display_str] = (g_key, z_key)
+            
+    selected_compares = st.multiselect("대조군 상권 선택 (최대 3개)", flat_zone_options, max_selections=3, default=flat_zone_options[:2], key="multiselect_compare")
+    
+    if len(selected_compares) > 0:
+        st.markdown("") 
+        cmp_cols = st.columns(len(selected_compares))
+        
+        for idx, cmp_name in enumerate(selected_compares):
+            g_target, z_target = zone_mapping_dict[cmp_name]
+            c_db = seoul_hyper_db[g_target][z_target]
+            c_total = c_db['일반1인'] + c_db['공동2인'] + c_db['대형다인'] + c_db['한방병원']
+            
+            with cmp_cols[idx]:
+                st.markdown(f"### 📍 {idx+1}. {z_target}")
+                st.caption(f"서울특별시 {g_target}")
+                
+                st.info(f"**상권 성격**: {c_db['상권구분']}")
+                st.metric(label="💰 추정 월평균 매출", value=c_db["월평균_추정매출"])
+                st.metric(label="📊 상권 종합 등급", value=c_db["상권등급"])
+                st.metric(label="🔥 경쟁 포화 인덱스", value=f"{c_db['포화도']}%")
+                st.metric(label="🏃 일평균 유동인구", value=c_db["유동인구"])
+                st.metric(label="🏡 배후 상주인구", value=c_db["주거인구"])
+                st.metric(label="⚡ 피크 트래픽 타임", value=c_db["피크타임"])
+                st.metric(label="🩺 관내 공급량", value=f"{c_total}개 소", delta=f"1인 {c_db['일반1인']} / 병원 {c_db['한방병원']}")
+                st.markdown("---")
+    else:
+        st.info("비교대조를 위해 상권을 1개 이상 선택해 주세요.")
+
+# =========================================================================
+# TAB 3: 서울시 전체 랭킹 리스트업 Board
+# =========================================================================
+with tab_rank:
+    st.subheader("🏆 서울 전역 마이크로 구역 월 매출 TOP 10 랭킹")
+    st.caption("백엔드 DB에 누적된 실거래 가중치를 기반으로 정렬된 가장 시장성 높은 상권 리스트입니다.")
+    st.dataframe(df_ranking[["자치구", "세부 마이크로 구역", "상권 속성", "종합 등급", "추정 월매출", "일평균 유동인구", "총 의료기관 수"]].head(10), use_container_width=True)
