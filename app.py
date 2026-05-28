@@ -21,7 +21,7 @@ st.caption("건강보험심사평가원 의료기관 데이터 밸런싱 및 소
 st.markdown("---")
 
 # =========================================================================
-# [백엔드 하이퍼 빅데이터베이스 - 25개 자치구 실제 리얼 좌표계 동기화 수립 완료]
+# [백엔드 하이퍼 빅데이터베이스]
 # =========================================================================
 seoul_hyper_db = {
     "강남구": {
@@ -46,13 +46,13 @@ seoul_hyper_db = {
     }
 }
 
-# 25개 자치구 지리좌표 동기화 마커 루프 가동
+# 25개 자치구 지리좌표 오토 보정 레이어
 gu_coords = {
     "강동구": (37.5301, 127.1238), "강북구": (37.6398, 127.0256), "강서구": (37.5509, 126.8495), "관악구": (37.4784, 126.9516),
     "광진구": (37.5385, 127.0824), "구로구": (37.4954, 126.8584), "금천구": (37.4569, 126.8954), "노원구": (37.6542, 127.0563),
-    "도봉구": (37.6687, 127.0471), "동대문구": (37.5744, 127.0397), "동작구": (37.5124, 126.9393), "서초구": (37.4836, 127.0327),
-    "성동구": (37.5633, 127.0371), "성북구": (37.5894, 127.0167), "송파구": (37.5145, 127.1059), "양천구": (37.5168, 126.8664),
-    "영등포구": (37.5264, 126.8963), "용산구": (37.5384, 126.9654), "은평구": (37.6027, 126.9291), "중구": (37.5636, 126.9976), "중랑구": (37.6065, 127.0927)
+    "도봉구": (37.6687, 127.0471), "동작구": (37.5124, 126.9393), "서초구": (37.4836, 127.0327), "성동구": (37.5633, 127.0371),
+    "성북구": (37.5894, 127.0167), "송파구": (37.5145, 127.1059), "양천구": (37.5168, 126.8664), "영등포구": (37.5264, 126.8963),
+    "용산구": (37.5384, 126.9654), "은평구": (37.6027, 126.9291), "중구": (37.5636, 126.9976), "중랑구": (37.6065, 127.0927)
 }
 
 for gu, coords in gu_coords.items():
@@ -62,9 +62,7 @@ for gu, coords in gu_coords.items():
             f"{gu} 대단지 아파트 밀집 배후지": {"상권구분": "안정적 거주 고정 배후 패밀리 상권", "일반1인": 18, "공동2인": 3, "대형다인": 1, "한방병원": 0, "월평균_추정매출": "3,450만 원", "매출숫자": 3450, "주요_매출_요일": "월요일/토요일", "유동인구": "2.6만 명", "주거인구": "6.8만 명", "상권등급": "B+등급", "open_1y": 2, "close_1y": 0, "lat": coords[0]+0.004, "lng": coords[1]+0.004}
         }
 
-# =========================================================================
-# [2단계 핵심 기능 1] 서울시 전체 상권 매출 순위 TOP 10 데이터프레임 빌드 연산
-# =========================================================================
+# 매출 순위 정렬 연산
 ranking_list = []
 for gu_name, zones in seoul_hyper_db.items():
     for zone_name, info in zones.items():
@@ -79,29 +77,36 @@ for gu_name, zones in seoul_hyper_db.items():
             "총 의료기관 수": info['일반1인'] + info['공동2인'] + info['대형다인'] + info['한방병원']
         })
 df_ranking = pd.DataFrame(ranking_list).sort_values(by="매출지표(숫자)", ascending=False).reset_index(drop=True)
-df_ranking.index = df_ranking.index + 1  # 순위를 1등부터 표기
+df_ranking.index = df_ranking.index + 1
+
+# =========================================================================
+# [🔥 버그 종결 포인트] 사이드바 선언을 전역(Global) 제어 모듈로 통합 및 격리
+# =========================================================================
+st.sidebar.header("🗺️ 글로벌 하이퍼 로컬 제어판")
+sorted_gu_list = sorted(list(seoul_hyper_db.keys()))
+
+# 고유 Key 값을 글로벌 스코프로 명확히 선언하여 중복 생성 방지
+selected_gu = st.sidebar.selectbox("1단계: 분석 대상 자치구 선택", sorted_gu_list, key="global_sidebar_gu")
+sub_zone_list = list(seoul_hyper_db[selected_gu].keys())
+selected_zone = st.sidebar.selectbox("2단계: 세부 마이크로 구역 선택", sub_zone_list, key="global_sidebar_zone")
+
+st.sidebar.markdown("---")
+st.sidebar.caption("💡 본 제어판에서 선택한 자치구와 마이크로 구역이 '하이퍼 로컬 입지 대시보드' 탭에 실시간 동기화됩니다.")
+
+# 데이터 매핑 연동
+db = seoul_hyper_db[selected_gu][selected_zone]
 
 # -------------------------------------------------------------------------
-# 상단 탭 레이아웃 인터랙션 시스템 수립
+# 상단 메인 탭 시스템 가동
 # -------------------------------------------------------------------------
 tab_main, tab_compare, tab_rank = st.tabs(["📊 하이퍼 로컬 입지 대시보드", "⚖️ 3개 구역 다중 입지 비교기", "🏆 서울시 상권 매출 TOP 10"])
 
 # =========================================================================
-# TAB 1: 기존 메인 대시보드 (오류 종결 및 가독성 확보 모듈)
+# TAB 1: 마이크로 입지 대시보드 스코프
 # =========================================================================
 with tab_main:
-    st.sidebar.header("🗺️ 하이퍼 로컬 입지 탐색기")
-    sorted_gu_list = sorted(list(seoul_hyper_db.keys()))
-    selected_gu = st.sidebar.selectbox("1단계: 분석 대상 자치구 선택", sorted_gu_list, key="main_gu")
-
-    sub_zone_list = list(seoul_hyper_db[selected_gu].keys())
-    selected_zone = st.sidebar.selectbox("2단계: 세부 마이크로 구역 선택", sub_zone_list, key="main_zone")
-    
-    db = seoul_hyper_db[selected_gu][selected_zone]
-
     st.markdown(f"### 📍 현재 선택 구역: **서울특별시 {selected_gu} {selected_zone}**")
 
-    # 6대 지표 스코어보드 전면 전진 배치
     row1_col1, row1_col2, row1_col3 = st.columns([1.5, 1, 1])
     with row1_col1: st.metric(label="🎯 상권 마이크로 속성 분류", value=db["상권구분"])
     with row1_col2: st.metric(label="💰 구역 추정 월평균 매출", value=db["월평균_추정매출"])
@@ -116,7 +121,6 @@ with tab_main:
         st.metric(label="🔥 경쟁 생존 인덱스", value=f"{survival_rate}%", delta=f"개업 {db['open_1y']} / 폐업 {db['close_1y']}")
 
     st.markdown("---")
-
     col_left, col_right = st.columns([1, 1.1])
 
     with col_left:
@@ -133,7 +137,6 @@ with tab_main:
         st.subheader("🧭 마이크로 분석 타겟 맵 스코프")
         
         m = folium.Map(location=[db["lat"], db["lng"]], zoom_start=15, tiles="cartodbpositron")
-        
         folium.Circle(location=[db["lat"], db["lng"]], radius=500, color="#2A75D3", fill=True, fill_color="#2A75D3", fill_opacity=0.10).add_to(m)
         folium.Marker(location=[db["lat"], db["lng"]], popup=f"{selected_zone}", icon=folium.Icon(color="red", icon="trophy")).add_to(m)
         
@@ -158,7 +161,6 @@ with tab_main:
                 display_name = f"{selected_zone.split()[0]} {cat['names'][i % len(cat['names'])]} ({clinic_idx}호)"
                 
                 tooltip_html = f"<div style='width:230px; font-size:13px;'><b>📍 {display_name}</b><br><small>({cat['종류']})</small><hr style='margin:5px 0;'>📐 평형: {cat['규모']}<br>💰 매출: {cat['추정매출']}<br>📈 평판: ⭐ {rating} ({review_cnt}개)</div>"
-                
                 folium.Marker(location=[c_lat, c_lng], tooltip=folium.Tooltip(tooltip_html, permanent=False), icon=folium.Icon(color=cat["color"], icon=cat["icon"])).add_to(m)
                 clinic_idx += 1
                 
@@ -166,7 +168,7 @@ with tab_main:
 
     with col_right:
         st.subheader("👑 AI 하이퍼 로컬 프리미엄 개원 전략 리포트")
-        if st.button("✨ 상권 맞춤형 핵심 경영 전략 리포트 즉석 제안", type="primary", use_container_width=True):
+        if st.button("✨ 상권 맞춤형 핵심 경영 전략 리포트 즉석 제안", type="primary", use_container_width=True, key="btn_ai_report"):
             with st.spinner("경영 포지셔닝 수립 중..."):
                 prompt_message = f"""
                 당신은 메디컬 상권 브랜딩 전략가입니다. 오직 제공된 상권 거시 지표를 연산하여 독점 지위를 확보할 '임상 경영 침투 리포트'를 집필해 주세요.
@@ -185,13 +187,12 @@ with tab_main:
                     st.error(f"오류 발생: {api_err}")
 
 # =========================================================================
-# [2단계 핵심 기능 2] TAB 2: 3개 구역 다중 입지 대조 비교 분석 엔진 가동
+# TAB 2: 3개 구역 다중 입지 비교 스펙트럼 덱
 # =========================================================================
 with tab_compare:
     st.subheader("⚖️ 마이크로 다중 입지 비교 대조 덱")
     st.caption("서울시 내에서 고민 중이신 후보 입지를 최대 3개까지 선택하여 핵심 통계 스펙트럼을 일렬 대조해 보세요.")
     
-    # 선택용 평탄화 리스트 콤보 조합 생성
     flat_zone_options = []
     zone_mapping_dict = {}
     for g_key, z_dict in seoul_hyper_db.items():
@@ -200,7 +201,7 @@ with tab_compare:
             flat_zone_options.append(display_str)
             zone_mapping_dict[display_str] = (g_key, z_key)
             
-    selected_compares = st.multiselect("대조군 상권 선택 (최대 3개)", flat_zone_options, max_selections=3, default=flat_zone_options[:2])
+    selected_compares = st.multiselect("대조군 상권 선택 (최대 3개)", flat_zone_options, max_selections=3, default=flat_zone_options[:2], key="multiselect_compare")
     
     if len(selected_compares) > 0:
         st.markdown("<br>", unsafe_allowed_html=True)
@@ -215,7 +216,6 @@ with tab_compare:
                 st.markdown(f"### 📍 {idx+1}. {z_target}")
                 st.caption(f"서울특별시 {g_target}")
                 
-                # USM 모듈 스타일 비교 명세 팩 카드 배치
                 st.info(f"**상권 성격**: {c_db['상권구분']}")
                 st.metric(label="💰 추정 월평균 매출", value=c_db["월평균_추정매출"])
                 st.metric(label="📊 상권 종합 등급", value=c_db["상권등급"])
@@ -228,7 +228,7 @@ with tab_compare:
         st.info("비교대조를 위해 상권을 1개 이상 선택해 주세요.")
 
 # =========================================================================
-# TAB 3: 서울시 전체 랭킹 정렬 보드판
+# TAB 3: 서울시 전체 랭킹 리스트업 Board
 # =========================================================================
 with tab_rank:
     st.subheader("🏆 서울 전역 마이크로 구역 월 매출 TOP 10 랭킹")
