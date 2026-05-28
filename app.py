@@ -79,21 +79,17 @@ for gu_name, zones in seoul_hyper_db.items():
 df_ranking = pd.DataFrame(ranking_list).sort_values(by="매출지표(숫자)", ascending=False).reset_index(drop=True)
 df_ranking.index = df_ranking.index + 1
 
-# =========================================================================
-# [🔥 버그 종결 포인트] 사이드바 선언을 전역(Global) 제어 모듈로 통합 및 격리
-# =========================================================================
+# 전역 사이드바 위젯 제어판 통합
 st.sidebar.header("🗺️ 글로벌 하이퍼 로컬 제어판")
 sorted_gu_list = sorted(list(seoul_hyper_db.keys()))
 
-# 고유 Key 값을 글로벌 스코프로 명확히 선언하여 중복 생성 방지
 selected_gu = st.sidebar.selectbox("1단계: 분석 대상 자치구 선택", sorted_gu_list, key="global_sidebar_gu")
 sub_zone_list = list(seoul_hyper_db[selected_gu].keys())
 selected_zone = st.sidebar.selectbox("2단계: 세부 마이크로 구역 선택", sub_zone_list, key="global_sidebar_zone")
 
 st.sidebar.markdown("---")
-st.sidebar.caption("💡 본 제어판에서 선택한 자치구와 마이크로 구역이 '하이퍼 로컬 입지 대시보드' 탭에 실시간 동기화됩니다.")
+st.sidebar.caption("💡 여기서 선택한 상권이 메인 대시보드 탭에 즉시 반영됩니다.")
 
-# 데이터 매핑 연동
 db = seoul_hyper_db[selected_gu][selected_zone]
 
 # -------------------------------------------------------------------------
@@ -133,7 +129,7 @@ with tab_main:
         k5.metric(label="🟠 대형 다인", value=f"{db['대형다인']}개 소")
         k6.metric(label="🟣 한방병원", value=f"{db['한방병원']}개 소")
         
-        st.markdown("")  
+        st.markdown("")  # 안전한 순정 공백 문법
         st.subheader("🧭 마이크로 분석 타겟 맵 스코프")
         
         m = folium.Map(location=[db["lat"], db["lng"]], zoom_start=15, tiles="cartodbpositron")
@@ -187,7 +183,7 @@ with tab_main:
                     st.error(f"오류 발생: {api_err}")
 
 # =========================================================================
-# TAB 2: 3개 구역 다중 입지 비교 스펙트럼 덱
+# TAB 2: 3개 구역 다중 입지 비교 스펙트럼 덱 (오류 원인 HTML 완전 제거)
 # =========================================================================
 with tab_compare:
     st.subheader("⚖️ 마이크로 다중 입지 비교 대조 덱")
@@ -204,7 +200,7 @@ with tab_compare:
     selected_compares = st.multiselect("대조군 상권 선택 (최대 3개)", flat_zone_options, max_selections=3, default=flat_zone_options[:2], key="multiselect_compare")
     
     if len(selected_compares) > 0:
-        st.markdown("<br>", unsafe_allowed_html=True)
+        st.markdown("") # 에러를 일으키던 하단 <br> 테그를 순정 마크다운 공백으로 100% 전면 교정 완료
         cmp_cols = st.columns(len(selected_compares))
         
         for idx, cmp_name in enumerate(selected_compares):
