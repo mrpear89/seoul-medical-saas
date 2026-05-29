@@ -247,4 +247,128 @@ with tab_main:
             <meta http-equiv="X-UA-Compatible" content="IE=edge">
             <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
             <title>NAVER MAP PRO ENGINE V24</title>
-            <script type="text/javascript" src="
+            <script type="text/javascript" src="https://openapi.map.naver.com/openapi/v3/maps.js?ncpClientId=___CLIENT_ID___&subaccount=true"></script>
+            <style>
+                body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; }
+                #map { width: 100%; height: 100%; background: #fafafa; border: 1px solid #e0e0e0; border-radius: 8px; }
+                .info-window { padding: 10px; font-family: 'Malgun Gothic', sans-serif; font-size: 12px; width: 200px; line-height: 1.4; }
+            </style>
+        </head>
+        <body>
+            <div id="map"></div>
+            <script>
+                try {
+                    var mapOptions = {
+                        center: new naver.maps.LatLng(___LAT___, ___LNG___),
+                        zoom: 15,
+                        zoomControl: true,
+                        mapTypeControl: true
+                    };
+
+                    var map = new naver.maps.Map('map', mapOptions);
+
+                    // 중심 타겟 마커
+                    new naver.maps.Marker({
+                        position: new naver.maps.LatLng(___LAT___, ___LNG___),
+                        map: map,
+                        icon: {
+                            content: '<div style="background-color: rgba(233,30,99,0.2); width: 40px; height: 40px; border-radius: 50%; border: 2px solid #e91e63; display: flex; align-items: center; justify-content: center;"><div style="background-color: #e91e63; width: 10px; height: 10px; border-radius: 50%;"></div></div>',
+                            anchor: new naver.maps.Point(20, 20)
+                        }
+                    });
+
+                    // 500m 반경 서클 가이드선
+                    new naver.maps.Circle({
+                        map: map,
+                        center: new naver.maps.LatLng(___LAT___, ___LNG___),
+                        radius: 500,
+                        fillColor: '#2a75d3',
+                        fillOpacity: 0.05,
+                        strokeColor: '#2a75d3',
+                        strokeOpacity: 0.3,
+                        strokeWeight: 2
+                    });
+
+                    // ⚓ 주요 기획 앵커 시설 배치
+                    var anchors = [
+                        { name: "핵심 역세권 출구 트래픽 교차 존", lat: ___LAT___ + 0.0012, lng: ___LNG___ - 0.0018, color: "#00287a" },
+                        { name: "실시간 타겟 메디컬 빌딩", lat: ___LAT___ - 0.0008, lng: ___LNG___ + 0.0015, color: "#212121" }
+                    ];
+
+                    anchors.forEach(function(anchor) {
+                        new naver.maps.Marker({
+                            position: new naver.maps.LatLng(anchor.lat, anchor.lng),
+                            map: map,
+                            icon: {
+                                content: '<div style="background:'+anchor.color+'; color:white; padding:5px 8px; border-radius:4px; font-size:11px; font-weight:bold; white-space:nowrap; border:1px solid white; box-shadow: 0px 2px 4px rgba(0,0,0,0.3);">⚓ '+anchor.name+'</div>',
+                                anchor: new naver.maps.Point(30, 10)
+                            }
+                        });
+                    });
+
+                    // 실제 한의원 분포 매핑 데이터 시각화
+                    var clinics = ___CLINICS_JSON___;
+                    clinics.forEach(function(clinic) {
+                        var isHospital = clinic.type.indexOf('병원') !== -1;
+                        var marker = new naver.maps.Marker({
+                            position: new naver.maps.LatLng(clinic.lat, clinic.lng),
+                            map: map,
+                            icon: {
+                                content: '<div style="background:'+(isHospital ? '#7b1fa2' : '#2e7d32')+'; width:12px; height:12px; border-radius:50%; border:2px solid white; box-shadow:0 0 4px rgba(0,0,0,0.4);"></div>',
+                                anchor: new naver.maps.Point(6, 6)
+                            }
+                        });
+
+                        var infowindow = new naver.maps.InfoWindow({
+                            content: '<div class="info-window"><strong>' + clinic.name + '</strong><br><span style="font-size:11px; color:#666;">' + clinic.type + '</span><br><p style="margin:5px 0 0 0; font-size:11px;">' + clinic.addr + '</p></div>'
+                        });
+
+                        naver.maps.Event.addListener(marker, "click", function() {
+                            if (infowindow.getMap()) { infowindow.close(); }
+                            else { infowindow.open(map, marker); }
+                        });
+                    });
+                } catch(e) {
+                    console.log(e);
+                }
+            </script>
+        </body>
+        </html>
+        """
+        
+        # 파이썬 고유 변수명들을 세이프티 정적 치환 레일로 동기화
+        naver_map_html = raw_html_template.replace("___CLIENT_ID___", NAVER_CLIENT_ID)\
+                                           .replace("___LAT___", str(db['lat']))\
+                                           .replace("___LNG___", str(db['lng']))\
+                                           .replace("___CLINICS_JSON___", clinics_json)
+
+        components.html(naver_map_html, height=450, width=650)
+
+    with col_right:
+        st.subheader("👑 AI 하이퍼 로컬 프리미엄 임상 경영 리포트")
+        current_zone_key = f"{selected_gu} {selected_zone}"
+        if "report_db" not in st.session_state: st.session_state["report_db"] = {}
+        if current_zone_key not in st.session_state["report_db"]: st.session_state["report_db"][current_zone_key] = ""
+
+        if st.button("✨ 상권 맞춤형 임상 독점 전략 리포트 즉석 제안", type="primary", use_container_width=True):
+            with st.spinner("임상 경영 침투 리포트 연산 중..."):
+                try:
+                    chat_completion = openai_client.chat.completions.create(
+                        model="gpt-4o",
+                        messages=[{"role": "user", "content": f"서울특별시 {selected_gu} {selected_zone} 한의원 개원 상권에 특화된 임상 진료과목 마케팅 전략 요약 리포트를 한국어로 작성해줘."}],
+                        temperature=0.7
+                    )
+                    st.session_state["report_db"][current_zone_key] = chat_completion.choices[0].message.content
+                    st.success("🎉 리포트 생성 완료!")
+                except Exception as api_err:
+                    st.error(f"오류 발생: {api_err}")
+
+        if st.session_state["report_db"][current_zone_key]:
+            st.markdown("---")
+            st.markdown(st.session_state["report_db"][current_zone_key])
+
+with tab_compare:
+    st.subheader("⚖️ 마이크로 다중 입지 비교 대조 덱")
+with tab_rank:
+    st.subheader("🏆 서울 전역 마이크로 구역 월 매출 TOP 10 랭킹")
+    st.dataframe(df_ranking[["자치구", "세부 마이크로 구역", "상권 속성", "종합 등급", "추정 월매출", "총 의료기관 수"]].head(10), use_container_width=True)
