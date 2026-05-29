@@ -42,7 +42,7 @@ def get_redevelopment_risk(gu_name):
 # [💾 심평원 실데이터 파싱 및 동적 하이퍼 데이터베이스 빌드 엔진]
 # =========================================================================
 gu_coords = {
-    "강남구": (37.4959, 127.0664), "강동구": (37.5301, 127.1238), "강북구": (37.6398, 127.0256), "강서구": (37.5509, 126.8495), 
+    "강남구": (37.4959, 127.0664), "강동구": (37.5301, 127.1238), "강북구": (37.6398, 127.0256), "강서구": (37.5509, 124.8495), 
     "관악구": (37.4784, 126.9516), "광진구": (37.5385, 127.0824), "구로구": (37.4954, 126.8584), "금천구": (37.4569, 126.8954), 
     "노원구": (37.6542, 127.0563), "도봉구": (37.6687, 127.0471), "동대문구": (37.5744, 127.0397), "동작구": (37.5124, 126.9393), 
     "서초구": (37.4836, 127.0327), "서대문구": (37.5792, 126.9368), "마포구": (37.5622, 126.9083), "종로구": (37.5730, 126.9794), 
@@ -58,70 +58,78 @@ def load_real_clinic_data():
         return None, "파일대기"
         
     try:
-        # 인코딩 통합 방어
         try:
             df = pd.read_csv(csv_file_path, encoding='utf-8')
         except:
             df = pd.read_csv(csv_file_path, encoding='euc-kr')
             
-        # [V14 핵심 업데이트] 영문/국문 믹스 및 유연한 컬럼 매핑 사전 구축
-        col_mapping = {}
+        # [V15 핵심 수술] 대용량 중복 컬럼 유입 시 에러 원천 차단 로직 적용
+        final_cols = {}
+        found_name, found_type, found_addr, found_x, found_y = False, False, False, False, False
+        
         for col in df.columns:
             cleaned = str(col).strip().replace(" ", "")
-            if '요양기관명' in cleaned or 'yadmNm' in cleaned or '기관명' in cleaned:
-                col_mapping[col] = '요양기관명'
-            elif '종별코드명' in cleaned or 'clCdNm' in cleaned or '종별' in cleaned:
-                col_mapping[col] = '종별코드명'
-            elif '주소' in cleaned or 'addr' in cleaned:
-                col_mapping[col] = '주소'
-            elif 'Y좌표' in cleaned or 'X좌표' in cleaned or '위도' in cleaned or '경도' in cleaned or 'X' == cleaned or 'Y' == cleaned or 'lat' in cleaned.lower() or 'lng' in cleaned.lower():
-                if 'Y' in cleaned or '위도' in cleaned or 'lat' in cleaned.lower():
-                    col_mapping[col] = 'Y좌표'
-                if 'X' in cleaned or '경도' in cleaned or 'lng' in cleaned.lower():
-                    col_mapping[col] = 'X좌표'
+            if ('요양기관명' in cleaned or 'yadmNm' in cleaned or '기관명' in cleaned) and not found_name:
+                final_cols[col] = '요양기관명'
+                found_name = True
+            elif ('종별코드명' in cleaned or 'clCdNm' in cleaned or '종별' in cleaned) and not found_type:
+                final_cols[col] = '종별코드명'
+                found_type = True
+            elif ('주소' in cleaned or 'addr' in cleaned) and not found_addr:
+                final_cols[col] = '주소'
+                found_addr = True
+            elif ('Y' in cleaned or '위도' in cleaned or 'lat' in cleaned.lower()) and not found_y:
+                final_cols[col] = 'Y좌표'
+                found_y = True
+            elif ('X' in cleaned or '경도' in cleaned or 'lng' in cleaned.lower()) and not found_x:
+                final_cols[col] = 'X좌표'
+                found_x = True
 
-        # 이름 표준화 세팅 적용
-        df = df.rename(columns=col_mapping)
+        df = df.rename(columns=final_cols)
         
-        # 가동 필수 요건 2차 검증
-        required_cols = ['요양기관명', '종별코드명', '주소']
-        if not all(col in df.columns for col in required_cols):
-            available_cols = ", ".join(list(df.columns))
-            return None, f"컬럼 구조 불일치 (현재 파일 열이름: {available_cols})"
+        # 필수 요소 단 한 개씩만 슬라이싱 추출하여 데이터프레임 경량화
+        required = ['요양기관명', '종별코드명', '주소']
+        if not all(x in df.columns for x in required):
+            return None, f"필수 열 누락 (현재 헤더 정보: {', '.join(list(df.columns[:6]))})"
             
-        # 데이터 정제: 서울시 한의원/한방병원 필터링
-        df = df[df['주소'].str.contains('서울', na=False, case=False)].reset_index(drop=True)
-        df = df[df['종별코드명'].str.contains('한의원|한방병원', na=False)].reset_index(drop=True)
+        # 데이터프레임이 꼬이지 않도록 명시적으로 타겟 시리즈만 추출
+        target_df = pd.DataFrame({
+            '요양기관명': df['요양기관명'].astype(str),
+            '종별코드명': df['종별코드명'].astype(str),
+            '주소': df['주소'].astype(str)
+        })
+        
+        if 'Y좌표' in df.columns and 'X좌표' in df.columns:
+            target_df['lat'] = pd.to_numeric(df['Y좌표'], errors='coerce')
+            target_df['lng'] = pd.to_numeric(df['X좌표'], errors='coerce')
+        else:
+            target_df['lat'] = None
+            target_df['lng'] = None
+
+        # 데이터 필터링 가동 (안전한 .str 체이닝 쉴드 확보)
+        target_df = target_df[target_df['주소'].str.contains('서울', na=False, case=False)].reset_index(drop=True)
+        target_df = target_df[target_df['종별코드명'].str.contains('한의원|한방병원', na=False)].reset_index(drop=True)
         
         def extract_gu(addr):
-            if not isinstance(addr, str): return "미분류"
             parts = addr.split()
             for part in parts:
                 if part.endswith('구'): return part
             return "미분류"
             
         def extract_dong(addr):
-            if not isinstance(addr, str): return "중심 상권"
             parts = addr.split()
             for part in parts:
                 if any(part.endswith(x) for x in ['동', '가', '로']): return part
             return "중심 상권"
             
-        df['자치구'] = df['주소'].apply(extract_gu)
-        df['마이크로구역'] = df['주소'].apply(extract_dong)
+        target_df['자치구'] = target_df['주소'].apply(extract_gu)
+        target_df['마이크로구역'] = target_df['주소'].apply(extract_dong)
         
-        if 'Y좌표' in df.columns and 'X좌표' in df.columns:
-            df['lat'] = pd.to_numeric(df['Y좌표'], errors='coerce')
-            df['lng'] = pd.to_numeric(df['X좌표'], errors='coerce')
-        else:
-            df['lat'] = None
-            df['lng'] = None
-            
-        return df, "성공"
+        return target_df, "성공"
     except Exception as e:
         return None, f"오류: {str(e)}"
 
-# 데이터 변환 레일 인터페이스 가동
+# 데이터 변환 레일 엔진 스타트
 raw_df, status = load_real_clinic_data()
 seoul_hyper_db = {}
 
@@ -143,16 +151,15 @@ if status == "성공" and raw_df is not None:
             random.seed(len(dong))
             g_1 = int(clinic_cnt * 0.7)
             g_2 = int(clinic_cnt * 0.2)
-            g_3 = clinic_cnt - g_1 - g_2
-            if g_3 < 0: g_3 = 0
+            g_3 = max(0, clinic_cnt - g_1 - g_2)
             
             valid_coords = group[group['lat'].notna() & group['lng'].notna()]
             if not valid_coords.empty:
                 center_lat = valid_coords['lat'].mean()
                 center_lng = valid_coords['lng'].mean()
             else:
-                center_lat = gu_coords[gu][0] + random.uniform(-0.005, 0.005)
-                center_lng = gu_coords[gu][1] + random.uniform(-0.005, 0.005)
+                center_lat = gu_coords[gu][0] + random.uniform(-0.003, 0.003)
+                center_lng = gu_coords[gu][1] + random.uniform(-0.003, 0.003)
                 
             est_sales = random.randint(3400, 5800)
             saturation = min(95, int((len(group) / 15) * 100)) if len(group) > 0 else 20
@@ -177,7 +184,7 @@ else:
             f"{gu} 대단지 아파트 밀집 배후지": {"상권구분": "안정적 거주 고정 배후 패밀리 상권", "일반1인": 16, "공동2인": 3, "대형다인": 1, "한방병원": 0, "월평균_추정매출": "3,650만 원", "매출숫자": 3650, "주요_매출_요일": "월요일/토요일", "유동인구": "2.8만 명", "주거인구": "7.1만 명", "상권등급": "B+등급", "open_1y": 2, "close_1y": 0, "lat": coords[0]+0.004, "lng": coords[1]+0.004, "포화도": 54, "피크타임": "오전 및 주말 약재 내원", "raw_clinics": []}
         }
 
-# 랭킹 연산 보드
+# 자동 랭킹 보드 연산
 ranking_list = []
 for gu_name, zones in seoul_hyper_db.items():
     for zone_name, info in zones.items():
@@ -194,17 +201,13 @@ for gu_name, zones in seoul_hyper_db.items():
 df_ranking = pd.DataFrame(ranking_list).sort_values(by="매출지표(숫자)", ascending=False).reset_index(drop=True)
 df_ranking.index = df_ranking.index + 1
 
-# 사이드바 리드아웃
+# 글로벌 제어판 레이아웃
 st.sidebar.header("🗺️ 글로벌 하이퍼 로컬 제어판")
 
-if "불일치" in status:
-    st.sidebar.error(f"❌ {status}")
-elif "오류" in status:
-    st.sidebar.error(f"❌ 가동 에러: {status}")
-elif status == "파일대기":
-    st.sidebar.warning("📢 실데이터 파일 대기 중")
-else:
-    st.sidebar.success("🎯 심평원 공식 실데이터 100% 동기화 가동 중")
+if "불일치" in status: st.sidebar.error(f"❌ {status}")
+elif "오류" in status: st.sidebar.error(f"❌ {status}")
+elif status == "파일대기": st.sidebar.warning("📢 실데이터 파일 대기 중")
+else: st.sidebar.success("🎯 심평원 공식 실데이터 100% 동기화 가동 중")
 
 sorted_gu_list = sorted(list(seoul_hyper_db.keys()))
 selected_gu = st.sidebar.selectbox("1단계: 분석 대상 자치구 선택", sorted_gu_list, key="global_sidebar_gu")
@@ -213,7 +216,7 @@ selected_zone = st.sidebar.selectbox("2단계: 세부 마이크로 구역 선택
 
 db = seoul_hyper_db[selected_gu][selected_zone]
 
-# 탭 레이아웃
+# 메인 시스템 탭
 tab_main, tab_compare, tab_rank = st.tabs(["📊 하이퍼 로컬 입지 대시보드", "⚖️ 3개 구역 다중 입지 비교기", "🏆 서울시 상권 매출 TOP 10"])
 
 with tab_main:
@@ -267,7 +270,7 @@ with tab_main:
         ]
         for anchor in anchors:
             b_law = get_building_law(anchor["이름"])
-            a_html = f"<div style='width:220px; font-size:12px;'><b>⚓ {anchor['이름']}</b><br>🏛️ 용도: {b_law['용도']}<br>🚒 소방법: {b_law['스프링클러']}</div>"
+            a_html = f"<div style='width:220px; font-size:12px;'><b>⚓ {anchor['이름']}</b><br>🏛️ 용도: {b_law['용도']}<br>🚒 소방법: {b_law['스프リング클러']}</div>"
             folium.Marker(location=[db["lat"]+anchor["lat_off"], db["lng"]+anchor["lng_off"]], tooltip=folium.Tooltip(a_html), icon=folium.Icon(color=anchor["color"], icon=anchor["icon"], prefix="fa")).add_to(m)
             
         if "raw_clinics" in db and db["raw_clinics"]:
@@ -291,7 +294,7 @@ with tab_main:
             for i in range(total_clinics):
                 c_lat = db["lat"] + random.uniform(-0.004, 0.004)
                 c_lng = db["lng"] + random.uniform(-0.004, 0.004)
-                tooltip_html = f"<div style='width:200px;'><b>📍 가상 매핑 한의원 ({i+1}호)</b><br><small>CSV 실데이터 업로드 대기 중</small></div>"
+                tooltip_html = f"<div style='width:200px;'><b>📍 가상 매핑 한의원 ({i+1}호)</b><br><small>CSV 실데이터 분석 정렬 중...</small></div>"
                 folium.Marker(location=[c_lat, c_lng], tooltip=folium.Tooltip(tooltip_html), icon=folium.Icon(color="green", icon="leaf")).add_to(m)
 
         st_folium(m, width=650, height=420)
@@ -331,7 +334,7 @@ with tab_main:
                 file_name=f"서울시_{selected_gu}_{selected_zone.replace(' ', '_')}_임상경영전략_리포트.txt",
                 mime="text/plain",
                 use_container_width=True,
-                key="btn_download_report_v14"
+                key="btn_download_report_v15"
             )
 
 # 다중 입지 비교기
