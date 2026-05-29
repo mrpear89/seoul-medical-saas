@@ -203,8 +203,7 @@ if status == "성공":
 else:
     st.sidebar.info("💡 하이브리드 인프라 모드로 정상 가동 중")
 
-sorted_gu_list = sorted(list(seoul_hyper_db.keys()))
-selected_gu = st.sidebar.selectbox("1단계: 분석 대상 자치구 선택", sorted_gu_list, key="global_sidebar_gu")
+selected_gu = st.sidebar.selectbox("1단계: 분석 대상 자치구 선택", sorted(list(seoul_hyper_db.keys())), key="global_sidebar_gu")
 selected_zone = st.sidebar.selectbox("2단계: 세부 마이크로 구역 선택", list(seoul_hyper_db[selected_gu].keys()), key="global_sidebar_zone")
 
 db = seoul_hyper_db[selected_gu][selected_zone]
@@ -238,131 +237,14 @@ with tab_main:
         
         clinics_json = json.dumps(db.get("raw_clinics", []))
         
-        # [V23 최종 혁신 패치] 비동기 동적 주입을 전면 제거하고 표준 정적 헤드 방식으로 전면 교체
-        # 브라우저 렌더링 순서를 네이버 엔진 동기화 후 마커 연산으로 직렬 고정화하여 인증 풀림 보장
-        naver_map_html = f"""
+        # [V24 파이썬 f-string 에러 원천 파괴 패치]
+        # 소스코드에 f-string을 완전히 제거하여 중괄호 중첩 문법 오류를 물리적으로 차단했습니다.
+        raw_html_template = """
         <!DOCTYPE html>
         <html>
         <head>
             <meta charset="UTF-8">
             <meta http-equiv="X-UA-Compatible" content="IE=edge">
             <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-            <title>NAVER MAP PRO ENGINE V23</title>
-            <script type="text/javascript" src="https://openapi.map.naver.com/openapi/v3/maps.js?ncpClientId={NAVER_CLIENT_ID}"></script>
-            <style>
-                body, html {{ margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; }}
-                #map {{ width: 100%; height: 100%; background: #fafafa; border: 1px solid #e0e0e0; border-radius: 8px; }}
-                .info-window {{ padding: 10px; font-family: 'Malgun Gothic', sans-serif; font-size: 12px; width: 200px; line-height: 1.4; }}
-            </style>
-        </head>
-        <body>
-            <div id="map"></div>
-            <script>
-                try {{
-                    var mapOptions = {{
-                        center: new naver.maps.LatLng({db['lat']}, {db['lng']}),
-                        zoom: 15,
-                        zoomControl: true,
-                        mapTypeControl: true
-                    }};
-
-                    var map = new naver.maps.Map('map', mapOptions);
-
-                    // 1. 분석 입지 타겟 마커
-                    new naver.maps.Marker({{
-                        position: new naver.maps.LatLng({db['lat']}, {db['lng']}),
-                        map: map,
-                        icon: {{
-                            content: '<div style="background-color: rgba(233,30,99,0.2); width: 40px; height: 40px; border-radius: 50%; border: 2px solid #e91e63; display: flex; align-items: center; justify-content: center;"><div style="background-color: #e91e63; width: 10px; height: 10px; border-radius: 50%;"></div></div>',
-                            anchor: new naver.maps.Point(20, 20)
-                        }}
-                    }});
-
-                    // 2. 500m 반경 원 가이드선
-                    new naver.maps.Circle({{
-                        map: map,
-                        center: new naver.maps.LatLng({db['lat']}, {db['lng']}),
-                        radius: 500,
-                        fillColor: '#2a75d3',
-                        fillOpacity: 0.05,
-                        strokeColor: '#2a75d3',
-                        strokeOpacity: 0.3,
-                        strokeWeight: 2
-                    }});
-
-                    // 3. 고정 주요 시설 앵커 배치
-                    var anchors = [
-                        {{ name: "핵심 역세권 출구 트래픽 교차 존", lat: {db['lat']} + 0.0012, lng: {db['lng']} - 0.0018, color: "#00287a" }},
-                        {{ name: "실시간 타겟 메디컬 빌딩", lat: {db['lat']} - 0.0008, lng: {db['lng']} + 0.0015, color: "#212121" }}
-                    ];
-
-                    anchors.forEach(function(anchor) {{
-                        new naver.maps.Marker({{
-                            position: new naver.maps.LatLng(anchor.lat, anchor.lng),
-                            map: map,
-                            icon: {{
-                                content: '<div style="background:'+anchor.color+'; color:white; padding:5px 8px; border-radius:4px; font-size:11px; font-weight:bold; white-space:nowrap; border:1px solid white; box-shadow: 0px 2px 4px rgba(0,0,0,0.3);">⚓ '+anchor.name+'</div>',
-                                anchor: new naver.maps.Point(30, 10)
-                            }}
-                        }});
-                    }});
-
-                    // 4. 심평원 실데이터 기반 개별 한의원 핀 매핑 레이어 가동
-                    var clinics = {clinics_json};
-                    clinics.forEach(function(clinic) {{
-                        var isHospital = clinic.type.indexOf('병원') !== -1;
-                        var marker = new naver.maps.Marker({{
-                            position: new naver.maps.LatLng(clinic.lat, clinic.lng),
-                            map: map,
-                            icon: {{
-                                content: '<div style="background:'+(isHospital ? '#7b1fa2' : '#2e7d32')+'; width:12px; height:12px; border-radius:50%; border:2px solid white; box-shadow:0 0 4px rgba(0,0,0,0.4);"></div>',
-                                anchor: new naver.maps.Point(6, 6)
-                            }}
-                        }});
-
-                        var infowindow = new naver.maps.InfoWindow({{
-                            content: '<div class="info-window"><strong>' + clinic.name + '</strong><br><span style="font-size:11px; color:#666;">' + clinic.type + '</span><br><p style="margin:5px 0 0 0; font-size:11px;">' + clinic.addr + '</p></div>'
-                        }});
-
-                        naver.maps.Event.addListener(marker, "click", function() {
-                            if (infowindow.getMap()) {{ infowindow.close(); }}
-                            else {{ infowindow.open(map, marker); }}
-                        });
-                    }});
-                }} catch(e) {{
-                    console.log(e);
-                }}
-            </script>
-        </body>
-        </html>
-        """
-        components.html(naver_map_html, height=450, width=650)
-
-    with col_right:
-        st.subheader("👑 AI 하이퍼 로컬 프리미엄 임상 경영 리포트")
-        current_zone_key = f"{selected_gu} {selected_zone}"
-        if "report_db" not in st.session_state: st.session_state["report_db"] = {}
-        if current_zone_key not in st.session_state["report_db"]: st.session_state["report_db"][current_zone_key] = ""
-
-        if st.button("✨ 상권 맞춤형 임상 독점 전략 리포트 즉석 제안", type="primary", use_container_width=True):
-            with st.spinner("임상 경영 침투 리포트 연산 중..."):
-                try:
-                    chat_completion = openai_client.chat.completions.create(
-                        model="gpt-4o",
-                        messages=[{"role": "user", "content": f"{selected_gu} {selected_zone} 한의원 개원 맞춤 임상 마케팅 리포트 작성해줘."}],
-                        temperature=0.7
-                    )
-                    st.session_state["report_db"][current_zone_key] = chat_completion.choices[0].message.content
-                    st.success("🎉 리포트 생성 완료!")
-                except Exception as api_err:
-                    st.error(f"오류 발생: {api_err}")
-
-        if st.session_state["report_db"][current_zone_key]:
-            st.markdown("---")
-            st.markdown(st.session_state["report_db"][current_zone_key])
-
-with tab_compare:
-    st.subheader("⚖️ 마이크로 다중 입지 비교 대조 덱")
-with tab_rank:
-    st.subheader("🏆 서울 전역 마이크로 구역 월 매출 TOP 10 랭킹")
-    st.dataframe(df_ranking[["자치구", "세부 마이크로 구역", "상권 속성", "종합 등급", "추정 월매출", "총 의료기관 수"]].head(10), use_container_width=True)
+            <title>NAVER MAP PRO ENGINE V24</title>
+            <script type="text/javascript" src="
