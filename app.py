@@ -187,4 +187,4 @@ if status == "성공" and raw_df is not None and not raw_df.empty:
 else:
     for gu, coords in gu_coords.items():
         seoul_hyper_db[gu] = {
-            f"{gu} 핵심 역세권 메인 상권": {"상권구분": "지역 중심 광역 업무 및 상업 혼
+            f"{gu} 핵심 역세권 메인 상권": {"상권구분": "지역 중심 광역 업무 및 상업 혼합 상권",
