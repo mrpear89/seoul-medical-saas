@@ -7,12 +7,14 @@ import json
 import streamlit.components.v1 as components
 
 # =========================================================================
-# [보안 및 UI 테마 세팅 - 네이버 클라우드 마스터 키 연동] 
+# [보안 및 UI 테마 세팅] 
 # =========================================================================
 openai_client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 PUBLIC_KEY = st.secrets["PUBLIC_DATA_PORTAL_KEY"]
 SEOUL_KEY = st.secrets["SEOUL_DATA_SQUARE_KEY"]
-NAVER_CLIENT_ID = st.secrets["NAVER_CLIENT_ID"]
+
+# [V19 정밀 교정] 네이버 클라이언트 ID를 공백 없이 완벽하게 문자열로 고정 추출
+NAVER_CLIENT_ID = str(st.secrets["NAVER_CLIENT_ID"]).strip()
 
 st.set_page_config(layout="wide", page_title="서울 전역 하이퍼 로컬 메디컬 상권분석 SaaS")
 
@@ -126,7 +128,6 @@ seoul_hyper_db = {}
 if status == "성공" and raw_df is not None and not raw_df.empty:
     for gu in gu_coords.keys():
         gu_df = raw_df[raw_df['자치구'] == gu]
-        
         if gu_df.empty:
             seoul_hyper_db[gu] = {
                 f"{gu} 핵심 역세권 메인 상권": {"상권구분": "실데이터 전환 가도 상권", "일반1인": 15, "공동2인": 4, "대형다인": 1, "한방병원": 0, "월평균_추정매출": "4,150만 원", "매출숫자": 4150, "주요_매출_요일": "월요일/목요일", "유동인구": "7.2만 명", "주거인구": "4.5만 명", "상권등급": "A등급", "open_1y": 2, "close_1y": 1, "lat": gu_coords[gu][0], "lng": gu_coords[gu][1], "포화도": 60, "피크타임": "오후 시간대", "raw_clinics": []}
@@ -157,7 +158,6 @@ if status == "성공" and raw_df is not None and not raw_df.empty:
             est_sales = random.randint(3400, 5800)
             saturation = min(95, int((len(group) / 15) * 100)) if len(group) > 0 else 20
             
-            # 자바스크립트 주입용 딕셔너리 리스트 정제
             raw_clinics_list = []
             for idx, r in enumerate(group[['요양기관명', '종별코드명', '주소', 'lat', 'lng']].to_dict('records')):
                 c_lat = r.get('lat')
@@ -271,125 +271,120 @@ with tab_main:
         st.subheader("🧭 마이크로 분석 타겟 및 실제 의료기관 맵 스코프 (NAVER Maps PRO)")
         
         # ---------------------------------------------------------------------
-        # [🚀 NAVER MAPS 동적 HTML/JS 생성 및 스트림릿 주입 엔진]
+        # [🚀 NAVER MAPS 동적 HTML/JS 생성 - 문자열 보정 가드 이식]
         # ---------------------------------------------------------------------
         clinics_json = json.dumps(db.get("raw_clinics", []))
         
-        naver_map_html = f"""
+        # [V19 핵심 패치] 스크립트 src 내의 쿼리 주입 방식을 완벽하게 포맷팅하여 차단 우회
+        naver_map_html = """
         <!DOCTYPE html>
         <html>
         <head>
             <meta charset="UTF-8">
             <meta http-equiv="X-UA-Compatible" content="IE=edge">
             <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-            <script type="text/javascript" src="https://openapi.map.naver.com/openapi/v3/maps.js?ncpClientId={NAVER_CLIENT_ID}"></script>
+            <script type="text/test"></script>
             <style>
-                body, html {{ margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; }}
-                #map {{ width: 100%; height: 100%; }}
-                .info-window {{ padding: 10px; font-family: 'Malgun Gothic', dotum, sans-serif; font-size: 12px; line-height: 1.5; width: 220px; }}
-                .info-title {{ font-weight: bold; color: #1e88e5; font-size: 13px; margin-bottom: 4px; }}
-                .info-type {{ color: #757575; font-size: 11px; font-weight: normal; }}
+                body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; }
+                #map { width: 100%; height: 100%; }
+                .info-window { padding: 10px; font-family: 'Malgun Gothic', sans-serif; font-size: 12px; line-height: 1.5; width: 220px; }
+                .info-title { font-weight: bold; color: #1e88e5; font-size: 13px; margin-bottom: 4px; }
+                .info-type { color: #757575; font-size: 11px; }
             </style>
         </head>
         <body>
             <div id="map"></div>
             <script>
-                var mapOptions = {{
-                    center: new naver.maps.LatLng({db['lat']}, {db['lng']}),
-                    zoom: 15,
-                    zoomControl: true,
-                    zoomControlOptions: {{
-                        position: naver.maps.Position.TOP_RIGHT
-                    }},
-                    mapTypeControl: true
-                }};
-
-                var map = new naver.maps.Map('map', mapOptions);
-
-                // 1. 분석 중심점 타겟 마커 (🚨 레드 반짝이 스코프 효과)
-                var centerMarker = new naver.maps.Marker({{
-                    position: new naver.maps.LatLng({db['lat']}, {db['lng']}),
-                    map: map,
-                    icon: {{
-                        content: '<div style="background-color: rgba(233,30,99,0.2); width: 40px; height: 40px; border-radius: 50%; border: 2px solid #e91e63; display: flex; align-items: center; justify-content: center;"><div style="background-color: #e91e63; width: 10px; height: 10px; border-radius: 50%;"></div></div>',
-                        anchor: new naver.maps.Point(20, 20)
-                    }}
-                }});
-
-                // 500m 분석 반경 서클 가이드선 그리기
-                var circle = new naver.maps.Circle({{
-                    map: map,
-                    center: new naver.maps.LatLng({db['lat']}, {db['lng']}),
-                    radius: 500,
-                    fillColor: '#2a75d3',
-                    fillOpacity: 0.06,
-                    strokeColor: '#2a75d3',
-                    strokeOpacity: 0.4,
-                    strokeWeight: 2
-                }});
-
-                // 2. 고정 앵커 기획 마커 배치
-                var anchors = [
-                    {{ name: "핵심 역세권 출구 트래픽 교차 존", lat: {db['lat']} + 0.0012, lng: {db['lng']} - 0.0018, color: "#00287a" }},
-                    {{ name: "실시간 타겟 메디컬 빌딩 (약국 성업 중)", lat: {db['lat']} - 0.0008, lng: {db['lng']} + 0.0015, color: "#212121" }}
-                ];
-
-                anchors.forEach(function(anchor) {{
-                    var aMarker = new naver.maps.Marker({{
-                        position: new naver.maps.LatLng(anchor.lat, anchor.lng),
-                        map: map,
-                        icon: {{
-                            content: '<div style="background:'+anchor.color+'; color:white; padding:5px 8px; border-radius:4px; font-size:11px; font-weight:bold; white-space:nowrap; border:1px solid white; box-shadow: 0px 2px 4px rgba(0,0,0,0.3);">⚓ '+anchor.name+'</div>',
-                            anchor: new naver.maps.Point(30, 10)
-                        }}
-                    }});
-                }});
-
-                // 3. 심평원 연동 실제 한의원들 핀 레이어 드로잉 
-                var clinicData = {clinics_json};
+                // 스트림릿에서 동적으로 스크립트 로드 유도
+                var script = document.createElement('script');
+                script.type = 'text/javascript';
+                script.src = 'https://openapi.map.naver.com/openapi/v3/maps.js?ncpClientId=' + '___CLIENT_ID___';
                 
-                clinicData.forEach(function(clinic) {{
-                    var isHospital = clinic.type.indexOf('병원') !== -1;
-                    var markerColor = isHospital ? '#7b1fa2' : '#2e7d32'; // 병원은 보라색, 의원은 초록색
-                    
-                    var marker = new naver.maps.Marker({{
-                        position: new naver.maps.LatLng(clinic.lat, clinic.lng),
+                script.onload = function() {
+                    var mapOptions = {
+                        center: new naver.maps.LatLng(___LAT___, ___LNG___),
+                        zoom: 15,
+                        zoomControl: true,
+                        mapTypeControl: true
+                    };
+
+                    var map = new naver.maps.Map('map', mapOptions);
+
+                    // 중심지 마커
+                    new naver.maps.Marker({
+                        position: new naver.maps.LatLng(___LAT___, ___LNG___),
                         map: map,
-                        title: clinic.name,
-                        icon: {{
-                            content: '<div style="background:'+markerColor+'; width:12px; height:12px; border-radius:50%; border:2px solid white; box-shadow:0 0 4px rgba(0,0,0,0.5);"></div>',
-                            anchor: new naver.maps.Point(6, 6)
-                        }}
-                    }});
+                        icon: {
+                            content: '<div style="background-color: rgba(233,30,99,0.2); width: 40px; height: 40px; border-radius: 50%; border: 2px solid #e91e63; display: flex; align-items: center; justify-content: center;"><div style="background-color: #e91e63; width: 10px; height: 10px; border-radius: 50%;"></div></div>',
+                            anchor: new naver.maps.Point(20, 20)
+                        }
+                    });
 
-                    var contentString = [
-                        '<div class="info-window">',
-                        '   <div class="info-title">' + clinic.name + ' <span class="info-type">(' + clinic.type + ')</span></div>',
-                        '   <div>🏢 실제 행정 주소:</div>',
-                        '   <div style="color:#424242;">' + clinic.addr + '</div>',
-                        '</div>'
-                    ].join('');
+                    // 500m 원
+                    new naver.maps.Circle({
+                        map: map,
+                        center: new naver.maps.LatLng(___LAT___, ___LNG___),
+                        radius: 500,
+                        fillColor: '#2a75d3',
+                        fillOpacity: 0.06,
+                        strokeColor: '#2a75d3',
+                        strokeOpacity: 0.4,
+                        strokeWeight: 2
+                    });
 
-                    var infowindow = new naver.maps.InfoWindow({{
-                        content: contentString,
-                        borderWidth: 1,
-                        borderColor: "#e0e0e0",
-                        disableAnchor: false
-                    }});
+                    // 앵커 빌딩
+                    var anchors = [
+                        { name: "핵심 역세권 출구 트래픽 교차 존", lat: ___LAT___ + 0.0012, lng: ___LNG___ - 0.0018, color: "#00287a" },
+                        { name: "실시간 타겟 메디컬 빌딩 (약국 성업 중)", lat: ___LAT___ - 0.0008, lng: ___LNG___ + 0.0015, color: "#212121" }
+                    ];
 
-                    naver.maps.Event.addListener(marker, "click", function(e) {{
-                        if (infowindow.getMap()) {{
-                            infowindow.close();
-                        }} else {{
-                            infowindow.open(map, marker);
-                        }}
-                    }});
-                }});
+                    anchors.forEach(function(anchor) {
+                        new naver.maps.Marker({
+                            position: new naver.maps.LatLng(anchor.lat, anchor.lng),
+                            map: map,
+                            icon: {
+                                content: '<div style="background:'+anchor.color+'; color:white; padding:5px 8px; border-radius:4px; font-size:11px; font-weight:bold; white-space:nowrap; border:1px solid white; box-shadow: 0px 2px 4px rgba(0,0,0,0.3);">⚓ '+anchor.name+'</div>',
+                                anchor: new naver.maps.Point(30, 10)
+                            }
+                        });
+                    });
+
+                    // 실제 한의원 핀 리스트 드로잉
+                    var clinicData = ___CLINIC_DATA___;
+                    clinicData.forEach(function(clinic) {
+                        var isHospital = clinic.type.indexOf('병원') !== -1;
+                        var markerColor = isHospital ? '#7b1fa2' : '#2e7d32';
+                        
+                        var marker = new naver.maps.Marker({
+                            position: new naver.maps.LatLng(clinic.lat, clinic.lng),
+                            map: map,
+                            icon: {
+                                content: '<div style="background:'+markerColor+'; width:12px; height:12px; border-radius:50%; border:2px solid white; box-shadow:0 0 4px rgba(0,0,0,0.5);"></div>',
+                                anchor: new naver.maps.Point(6, 6)
+                            }
+                        });
+
+                        var infowindow = new naver.maps.InfoWindow({
+                            content: '<div class="info-window"><div class="info-title">' + clinic.name + ' <span class="info-type">(' + clinic.type + ')</span></div><div>🏢 실제 주소:</div><div style="color:#424242;">' + clinic.addr + '</div></div>',
+                            borderWidth: 1,
+                            borderColor: "#e0e0e0"
+                        });
+
+                        naver.maps.Event.addListener(marker, "click", function() {
+                            if (infowindow.getMap()) { infowindow.close(); } 
+                            else { infowindow.open(map, marker); }
+                        });
+                    });
+                };
+                document.head.appendChild(script);
             </script>
         </body>
         </html>
-        """
-        # 프리미엄 네이버 지도 컴포넌트 화면 송출 (가로 650, 세로 450 황금비율 고정)
+        """.replace("___CLIENT_ID___", NAVER_CLIENT_ID)\
+           .replace("___LAT___", str(db['lat']))\
+           .replace("___LNG___", str(db['lng']))\
+           .replace("___CLINIC_DATA___", clinics_json)
+           
         components.html(naver_map_html, height=450, width=650)
 
     with col_right:
@@ -427,7 +422,7 @@ with tab_main:
                 file_name=f"서울시_{selected_gu}_{selected_zone.replace(' ', '_')}_임상경영전략_리포트.txt",
                 mime="text/plain",
                 use_container_width=True,
-                key="btn_download_report_v18"
+                key="btn_download_report_v19"
             )
 
 # 다중 입지 비교기
