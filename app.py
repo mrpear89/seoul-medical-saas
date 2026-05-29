@@ -42,7 +42,7 @@ def get_redevelopment_risk(gu_name):
 # [💾 심평원 실데이터 파싱 및 동적 하이퍼 데이터베이스 빌드 엔진]
 # =========================================================================
 gu_coords = {
-    "강남구": (37.4959, 127.0664), "강동구": (37.5301, 127.1238), "강북구": (37.6398, 127.0256), "강서구": (37.5509, 124.8495), 
+    "강남구": (37.4959, 127.0664), "강동구": (37.5301, 127.1238), "강북구": (37.6398, 127.0256), "강서구": (37.5509, 126.8495), 
     "관악구": (37.4784, 126.9516), "광진구": (37.5385, 127.0824), "구로구": (37.4954, 126.8584), "금천구": (37.4569, 126.8954), 
     "노원구": (37.6542, 127.0563), "도봉구": (37.6687, 127.0471), "동대문구": (37.5744, 127.0397), "동작구": (37.5124, 126.9393), 
     "서초구": (37.4836, 127.0327), "서대문구": (37.5792, 126.9368), "마포구": (37.5622, 126.9083), "종로구": (37.5730, 126.9794), 
@@ -63,50 +63,39 @@ def load_real_clinic_data():
         except:
             df = pd.read_csv(csv_file_path, encoding='euc-kr')
             
-        # [V15 핵심 수술] 대용량 중복 컬럼 유입 시 에러 원천 차단 로직 적용
-        final_cols = {}
-        found_name, found_type, found_addr, found_x, found_y = False, False, False, False, False
+        # [V16 핵심 가드] 중복 매핑 시 에러 유발 차원 붕괴를 완전히 방지하기 위한 1차원 유일 열 추출법
+        src_name_col, src_type_col, src_addr_col, src_x_col, src_y_col = None, None, None, None, None
         
         for col in df.columns:
             cleaned = str(col).strip().replace(" ", "")
-            if ('요양기관명' in cleaned or 'yadmNm' in cleaned or '기관명' in cleaned) and not found_name:
-                final_cols[col] = '요양기관명'
-                found_name = True
-            elif ('종별코드명' in cleaned or 'clCdNm' in cleaned or '종별' in cleaned) and not found_type:
-                final_cols[col] = '종별코드명'
-                found_type = True
-            elif ('주소' in cleaned or 'addr' in cleaned) and not found_addr:
-                final_cols[col] = '주소'
-                found_addr = True
-            elif ('Y' in cleaned or '위도' in cleaned or 'lat' in cleaned.lower()) and not found_y:
-                final_cols[col] = 'Y좌표'
-                found_y = True
-            elif ('X' in cleaned or '경도' in cleaned or 'lng' in cleaned.lower()) and not found_x:
-                final_cols[col] = 'X좌표'
-                found_x = True
+            if ('요양기관명' in cleaned or 'yadmNm' in cleaned or '기관명' in cleaned) and not src_name_col:
+                src_name_col = col
+            elif ('종별코드명' in cleaned or 'clCdNm' in cleaned or '종별' in cleaned) and not src_type_col:
+                src_type_col = col
+            elif ('주소' in cleaned or 'addr' in cleaned) and not src_addr_col:
+                src_addr_col = col
+            elif ('Y' in cleaned or '위도' in cleaned or 'lat' in cleaned.lower()) and not src_y_col:
+                src_y_col = col
+            elif ('X' in cleaned or '경도' in cleaned or 'lng' in cleaned.lower()) and not src_x_col:
+                src_x_col = col
 
-        df = df.rename(columns=final_cols)
+        if not (src_name_col and src_type_col and src_addr_col):
+            return None, "필수 열 누락"
+
+        # 1차원 벡터(Series) 상태에서 일대일 대입하여 차원 왜곡 원천 차단
+        target_df = pd.DataFrame()
+        target_df['요양기관명'] = df[src_name_col].astype(str)
+        target_df['종별코드명'] = df[src_type_col].astype(str)
+        target_df['주소'] = df[src_addr_col].astype(str)
         
-        # 필수 요소 단 한 개씩만 슬라이싱 추출하여 데이터프레임 경량화
-        required = ['요양기관명', '종별코드명', '주소']
-        if not all(x in df.columns for x in required):
-            return None, f"필수 열 누락 (현재 헤더 정보: {', '.join(list(df.columns[:6]))})"
-            
-        # 데이터프레임이 꼬이지 않도록 명시적으로 타겟 시리즈만 추출
-        target_df = pd.DataFrame({
-            '요양기관명': df['요양기관명'].astype(str),
-            '종별코드명': df['종별코드명'].astype(str),
-            '주소': df['주소'].astype(str)
-        })
-        
-        if 'Y좌표' in df.columns and 'X좌표' in df.columns:
-            target_df['lat'] = pd.to_numeric(df['Y좌표'], errors='coerce')
-            target_df['lng'] = pd.to_numeric(df['X좌표'], errors='coerce')
+        if src_y_col and src_x_col:
+            target_df['lat'] = pd.to_numeric(df[src_y_col], errors='coerce')
+            target_df['lng'] = pd.to_numeric(df[src_x_col], errors='coerce')
         else:
             target_df['lat'] = None
             target_df['lng'] = None
 
-        # 데이터 필터링 가동 (안전한 .str 체이닝 쉴드 확보)
+        # 안정적인 문자열 필터링
         target_df = target_df[target_df['주소'].str.contains('서울', na=False, case=False)].reset_index(drop=True)
         target_df = target_df[target_df['종별코드명'].str.contains('한의원|한방병원', na=False)].reset_index(drop=True)
         
@@ -129,7 +118,7 @@ def load_real_clinic_data():
     except Exception as e:
         return None, f"오류: {str(e)}"
 
-# 데이터 변환 레일 엔진 스타트
+# 데이터 가동 인프라 엔진 기동
 raw_df, status = load_real_clinic_data()
 seoul_hyper_db = {}
 
@@ -153,10 +142,13 @@ if status == "성공" and raw_df is not None:
             g_2 = int(clinic_cnt * 0.2)
             g_3 = max(0, clinic_cnt - g_1 - g_2)
             
-            valid_coords = group[group['lat'].notna() & group['lng'].notna()]
-            if not valid_coords.empty:
-                center_lat = valid_coords['lat'].mean()
-                center_lng = valid_coords['lng'].mean()
+            # [V16 차원 쉴드] 1차원 수치 계산 명시 처리
+            valid_lats = group['lat'].dropna()
+            valid_lngs = group['lng'].dropna()
+            
+            if not valid_lats.empty and not valid_lngs.empty:
+                center_lat = float(valid_lats.mean())
+                center_lng = float(valid_lngs.mean())
             else:
                 center_lat = gu_coords[gu][0] + random.uniform(-0.003, 0.003)
                 center_lng = gu_coords[gu][1] + random.uniform(-0.003, 0.003)
@@ -204,10 +196,13 @@ df_ranking.index = df_ranking.index + 1
 # 글로벌 제어판 레이아웃
 st.sidebar.header("🗺️ 글로벌 하이퍼 로컬 제어판")
 
-if "불일치" in status: st.sidebar.error(f"❌ {status}")
-elif "오류" in status: st.sidebar.error(f"❌ {status}")
-elif status == "파일대기": st.sidebar.warning("📢 실데이터 파일 대기 중")
-else: st.sidebar.success("🎯 심평원 공식 실데이터 100% 동기화 가동 중")
+if "불일치" in status or "오류" in status:
+    st.sidebar.error(f"❌ 데이터 파싱 대기 상태")
+    st.sidebar.caption(f"상세정보: {status}")
+elif status == "파일대기":
+    st.sidebar.warning("📢 실데이터 파일 대기 중")
+else:
+    st.sidebar.success("🎯 심평원 공식 실데이터 100% 동기화 가동 중")
 
 sorted_gu_list = sorted(list(seoul_hyper_db.keys()))
 selected_gu = st.sidebar.selectbox("1단계: 분석 대상 자치구 선택", sorted_gu_list, key="global_sidebar_gu")
@@ -216,7 +211,7 @@ selected_zone = st.sidebar.selectbox("2단계: 세부 마이크로 구역 선택
 
 db = seoul_hyper_db[selected_gu][selected_zone]
 
-# 메인 시스템 탭
+# 메인 탭 시스템
 tab_main, tab_compare, tab_rank = st.tabs(["📊 하이퍼 로컬 입지 대시보드", "⚖️ 3개 구역 다중 입지 비교기", "🏆 서울시 상권 매출 TOP 10"])
 
 with tab_main:
@@ -270,7 +265,7 @@ with tab_main:
         ]
         for anchor in anchors:
             b_law = get_building_law(anchor["이름"])
-            a_html = f"<div style='width:220px; font-size:12px;'><b>⚓ {anchor['이름']}</b><br>🏛️ 용도: {b_law['용도']}<br>🚒 소방법: {b_law['스프リング클러']}</div>"
+            a_html = f"<div style='width:220px; font-size:12px;'><b>⚓ {anchor['이름']}</b><br>🏛️ 용도: {b_law['용도']}<br>🚒 소방법: {b_law['스프링클러']}</div>"
             folium.Marker(location=[db["lat"]+anchor["lat_off"], db["lng"]+anchor["lng_off"]], tooltip=folium.Tooltip(a_html), icon=folium.Icon(color=anchor["color"], icon=anchor["icon"], prefix="fa")).add_to(m)
             
         if "raw_clinics" in db and db["raw_clinics"]:
@@ -280,8 +275,8 @@ with tab_main:
                 
                 if pd.isna(c_lat) or pd.isna(c_lng):
                     random.seed(idx)
-                    c_lat = db["lat"] + random.uniform(-0.003, 0.003)
-                    c_lng = db["lng"] + random.uniform(-0.003, 0.003)
+                    c_lat = db["lat"] + random.uniform(-0.002, 0.002)
+                    c_lng = db["lng"] + random.uniform(-0.002, 0.002)
                 
                 is_hospital = "병원" in str(clinic['종별코드명'])
                 p_color = "purple" if is_hospital else random.choice(["green", "blue", "orange"])
@@ -334,7 +329,7 @@ with tab_main:
                 file_name=f"서울시_{selected_gu}_{selected_zone.replace(' ', '_')}_임상경영전략_리포트.txt",
                 mime="text/plain",
                 use_container_width=True,
-                key="btn_download_report_v15"
+                key="btn_download_report_v16"
             )
 
 # 다중 입지 비교기
